@@ -28,10 +28,11 @@ import (
 var ErrNilServer = errors.New("rsvp: server is nil")
 
 type runner struct {
-	Timeout         time.Duration
-	Signals         []os.Signal
-	ShutdownContext context.Context
-	LogFunc         func(msg string)
+	Timeout           time.Duration
+	Signals           []os.Signal
+	ShutdownContext   context.Context
+	CertFile, KeyFile string
+	LogFunc           func(msg string)
 
 	server  *http.Server
 	sigChan chan os.Signal
@@ -70,6 +71,8 @@ func (r *runner) run() error {
 	if err != nil {
 		return err
 	}
+
+	defer ln.Close()
 
 	shutdownErrChan, shutdownCancel := func() (chan error, context.CancelFunc) {
 		cancelCtx, cancel := context.WithCancel(context.Background())
@@ -112,10 +115,17 @@ func (r *runner) run() error {
 		listenAddr = fmt.Sprintf(":%d", r.listenPort)
 	}
 
-	r.log(fmt.Sprintf("Starting server on %s...", listenAddr))
-	if err := r.server.Serve(ln); err != http.ErrServerClosed {
+	var serveErr error
+	if r.CertFile != "" && r.KeyFile != "" {
+		r.log(fmt.Sprintf("Starting TLS server on %s...", listenAddr))
+		serveErr = r.server.ServeTLS(ln, r.CertFile, r.KeyFile)
+	} else {
+		r.log(fmt.Sprintf("Starting server on %s...", listenAddr))
+		serveErr = r.server.Serve(ln)
+	}
+	if serveErr != nil && serveErr != http.ErrServerClosed {
 		// Unexpected error, so return it and skip waiting for shutdown to complete
-		return err
+		return serveErr
 	}
 
 	// Wait until shutdown has finished, returning error, if any
@@ -146,6 +156,16 @@ func WithSignals(sig os.Signal, extra ...os.Signal) Option {
 // If a timeout is also set by [WithTimeout], the shutdown will be canceled if it takes longer than the timeout, even if the context itself has not been canceled.
 func WithShutdownContext(ctx context.Context) Option {
 	return func(r *runner) { r.ShutdownContext = ctx }
+}
+
+// WithTLS sets the TLS certificate and key files to use for the server.
+//
+// If both certFile and keyFile are provided, the server will use TLS. Otherwise, it will use plain text HTTP.
+func WithTLS(certFile, keyFile string) Option {
+	return func(r *runner) {
+		r.CertFile = certFile
+		r.KeyFile = keyFile
+	}
 }
 
 // WithLogFunc sets the logging function that will be used to log messages during the server lifecycle.

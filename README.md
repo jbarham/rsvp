@@ -6,8 +6,8 @@ The API is just two functions: `rsvp.ListenAndServe` is a drop-in replacement fo
 library `http.ListenAndServe` function but adds graceful shutdown.
 For more advanced use cases, `rsvp.Run` runs an `http.Server` with graceful shutdown.
 
-The default behavior can be customized with options to set trigger signals, shutdown timeout and context,
-and a logging function.
+The default behavior can be customized with options to configure trigger signals, shutdown timeout and context,
+TLS and logging.
 
 ## Installation
 
