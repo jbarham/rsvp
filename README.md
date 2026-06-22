@@ -59,12 +59,12 @@ func main() {
 }
 ```
 
-Run `go run github.com/jbarham/rsvp/demo` to start the above HTTP server
+Run `go run github.com/jbarham/rsvp/demo@latest` to start the above HTTP server
 without graceful shutdown. Load http://localhost:8080/5 to trigger a 5 second
 request, then stop the server with _Ctrl-C_ and note that the in-flight request
 is terminated.
 
-Run `go run github.com/jbarham/rsvp/demo -graceful` to enable graceful shutdown,
+Run `go run github.com/jbarham/rsvp/demo@latest -graceful` to enable graceful shutdown,
 repeat the above steps and note that the in-flight request is allowed to finish
 before the server shuts down.
 
