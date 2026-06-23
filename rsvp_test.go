@@ -2,6 +2,7 @@ package rsvp
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -27,10 +28,11 @@ func TestInvalidAddr(t *testing.T) {
 }
 
 type shutdownTest struct {
-	name        string
-	delay       time.Duration
-	timeout     time.Duration
-	expectedErr string
+	name              string
+	delay             time.Duration
+	timeout           time.Duration
+	expectedServerErr string
+	expectedClientErr string
 }
 
 func (st shutdownTest) run(t *testing.T, useTLS bool) {
@@ -74,7 +76,10 @@ func (st shutdownTest) run(t *testing.T, useTLS bool) {
 		}
 		resp, err := client.Get(url)
 		if err != nil {
-			t.Fatal(err)
+			if errors.Unwrap(err).Error() != st.expectedClientErr {
+				t.Fatal(err)
+			}
+			return
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
@@ -92,9 +97,15 @@ func (st shutdownTest) run(t *testing.T, useTLS bool) {
 		time.Sleep(150 * time.Millisecond) // Give HTTP request a chance to run
 		r.sigChan <- syscall.SIGINT        // Trigger shutdown
 	})
-	if err := r.run(); err != nil && err.Error() != st.expectedErr {
-		t.Errorf("got error %s but wanted %s", err, st.expectedErr)
-	}
+	wg.Go(func() {
+		defer func() {
+			// Simulate server exiting after shutdown completes
+			server.Close()
+		}()
+		if err := r.run(); err != nil && err.Error() != st.expectedServerErr {
+			t.Errorf("got error %s but wanted %s", err, st.expectedServerErr)
+		}
+	})
 	wg.Wait()
 }
 
@@ -111,10 +122,11 @@ func TestShutdown(t *testing.T) {
 				timeout: 200 * time.Millisecond,
 			},
 			{
-				name:        "bad timeout",
-				delay:       300 * time.Millisecond,
-				timeout:     100 * time.Millisecond,
-				expectedErr: "context deadline exceeded",
+				name:              "bad timeout",
+				delay:             300 * time.Millisecond,
+				timeout:           100 * time.Millisecond,
+				expectedServerErr: "context deadline exceeded",
+				expectedClientErr: "EOF",
 			},
 		} {
 			testName := test.name
